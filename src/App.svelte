@@ -1,17 +1,17 @@
 <script lang="ts">
+  import { SEED_REVEAL_CLICKS } from "./core/rules.ts";
   import { game, resetGame } from "./game.svelte.ts";
+  import ContactPanel from "./ui/ContactPanel.svelte";
+  import Directive from "./ui/Directive.svelte";
   import EndingPanel from "./ui/EndingPanel.svelte";
   import Header from "./ui/Header.svelte";
+  import KnowledgePanel from "./ui/KnowledgePanel.svelte";
   import LogPanel from "./ui/LogPanel.svelte";
   import ObservePanel from "./ui/ObservePanel.svelte";
   import SatellitePanel from "./ui/SatellitePanel.svelte";
-  import ScanPanel from "./ui/ScanPanel.svelte";
   import SeedPanel from "./ui/SeedPanel.svelte";
   import SystemsPanel from "./ui/SystemsPanel.svelte";
   import TransmitPanel from "./ui/TransmitPanel.svelte";
-
-  /** 何度か送信して反応が見えてから、種まきの欄を開く */
-  const SEED_REVEAL_CLICKS = 3;
 
   function reset() {
     if (confirm("セーブを消して最初からやり直しますか？")) resetGame();
@@ -20,25 +20,26 @@
 
 <main>
   <Header />
+  <Directive />
   {#if game.phase === "ended"}
     <EndingPanel />
   {/if}
+  <LogPanel />
   <div class="grid">
+    <!-- 左: 地上（観測） / 右: 衛星（操作） -->
+    <div class="column">
+      <ObservePanel />
+      {#if game.phase !== "prologue"}<KnowledgePanel />{/if}
+    </div>
     <div class="column">
       <SatellitePanel />
       {#if game.phase === "prologue"}
-        <ScanPanel />
-      {:else}
-        <ObservePanel />
-      {/if}
-    </div>
-    <div class="column">
-      {#if game.phase === "chapter1"}
+        <ContactPanel />
+      {:else if game.phase === "chapter1"}
         <TransmitPanel />
         {#if game.stats.clicks >= SEED_REVEAL_CLICKS}<SeedPanel />{/if}
         <SystemsPanel />
       {/if}
-      <LogPanel />
     </div>
   </div>
   <footer class="muted">

@@ -13,6 +13,14 @@ export function formatBits(bits: number): string {
   return formatSi(bits, "b");
 }
 
+/** 増減の速さ（例: +12.3 b/年、−0.4 b/年） */
+export function formatRate(bitsPerYear: number): string {
+  const sign = bitsPerYear < 0 ? "−" : "+";
+  const abs = Math.abs(bitsPerYear);
+  const value = abs < 10 ? `${abs.toFixed(1)} b` : formatBits(abs);
+  return `${sign}${value}/年`;
+}
+
 export function formatYear(year: number): string {
   return `Y+${String(Math.floor(year)).padStart(4, "0")}`;
 }

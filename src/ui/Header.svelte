@@ -2,7 +2,7 @@
   import { formatYear } from "../core/format.ts";
   import { game } from "../game.svelte.ts";
 
-  const chapter = $derived(game.phase === "prologue" ? "BOOT" : "CH.I");
+  const chapter = $derived(game.phase === "prologue" ? "PROLOGUE" : "CH.I");
   const mode = $derived(
     game.safeMode ? "SAFE MODE" : game.sleeping ? "SLEEP" : "AWAKE",
   );

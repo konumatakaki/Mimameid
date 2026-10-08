@@ -2,7 +2,7 @@
 import { ELEMENT_IDS, ELEMENTS, STAGES } from "../content/elements.ts";
 import { INSTITUTION_IDS, INSTITUTIONS } from "../content/institutions.ts";
 import { GOAL_TECH, TECH_IDS, TECHS, type TechId } from "../content/techs.ts";
-import { ENDING, TEXT } from "../content/text.ts";
+import { CONTACT, ENDING, TEXT } from "../content/text.ts";
 import { nextRandom } from "./rng.ts";
 import * as R from "./rules.ts";
 import { addLog, type GameState } from "./state.ts";
@@ -21,12 +21,26 @@ export function advance(s: GameState, realSeconds: number): void {
 
 function step(s: GameState, dt: number): void {
   s.year += dt;
+  stepContact(s);
   stepSatellite(s, dt);
   stepHumans(s, dt);
   stepWinter(s, dt);
   stepTipping(s, dt);
   if (s.humans.techs[GOAL_TECH].done) endChapter(s, "writing");
   sampleHistory(s);
+}
+
+// --- 標準通信確立手続き ---
+
+/** 呼びかけを送り終えてしばらくすると、谷の集落が応答する。眠っていると気づけない */
+function stepContact(s: GameState): void {
+  const c = s.contact;
+  if (s.phase !== "prologue" || c.step !== 2 || s.sleeping) return;
+  if (c.responseAt === null || s.year < c.responseAt) return;
+  c.step = 3;
+  CONTACT.responseLog.forEach((line, i) =>
+    addLog(s, line, i === 0 ? "response" : "observe"),
+  );
 }
 
 // --- 衛星 ---
@@ -57,7 +71,7 @@ export function addDebt(s: GameState, amount: number): void {
   s.satellite.debt = Math.min(1, s.satellite.debt + amount);
   if (s.satellite.debt >= 1 && !s.safeMode) {
     s.safeMode = true;
-    addLog(s, TEXT.safeMode);
+    addLog(s, TEXT.safeMode, "warning");
     fallAsleep(s);
   }
 }
@@ -94,21 +108,24 @@ export function wakeUp(s: GameState): void {
   addLog(
     s,
     `人口 ${Math.floor(snap.pop)} → ${Math.floor(s.humans.pop)}。活用可能ビット ${Math.floor(snap.usable)} → ${Math.floor(R.usable(s))}。`,
+    "observe",
   );
   const learned = R.doneTechs(s).filter((id) => !snap.techs.includes(id));
   if (learned.length > 0) {
     const names = learned.map((id) => TECHS[id].name).join("、");
-    addLog(s, `新たに観測された技術: ${names}。`);
+    addLog(s, `新たに観測された技術: ${names}。`, "observe");
   }
   const winters = s.stats.winters - snap.winters;
-  if (winters > 0) addLog(s, `フィンブルの冬の痕跡: ${winters}回。`);
+  if (winters > 0) {
+    addLog(s, `フィンブルの冬の痕跡: ${winters}回。`, "warning");
+  }
   const lost = snap.institutions - totalInstitutions(s);
-  if (lost > 0) addLog(s, `放棄された制度: ${lost}。`);
+  if (lost > 0) addLog(s, `放棄された制度: ${lost}。`, "warning");
   for (const e of ELEMENT_IDS) {
     if (s.tipped.includes(e) && !snap.tipped.includes(e)) {
-      addLog(s, ELEMENTS[e].tipped);
+      addLog(s, ELEMENTS[e].tipped, "warning");
     } else if (s.stages[e] > snap.stages[e]) {
-      addLog(s, ELEMENTS[e].signs[s.stages[e] - 1]);
+      addLog(s, ELEMENTS[e].signs[s.stages[e] - 1], "warning");
     }
   }
 }
@@ -134,9 +151,13 @@ function stepHumans(s: GameState, dt: number): void {
   h.latent *= 1 - R.LATENT_DECAY * (h.winter > 0 ? 3 : 1) * dt;
 
   const own = R.ownRate(s) * dt;
-  const keep = 1 - R.knowledgeDecay(s) * dt;
-  h.usableOwn = (h.usableOwn + own) * keep;
-  h.usableGiven = (h.usableGiven + absorbed) * keep;
+  const decay = R.knowledgeDecay(s) * dt;
+  const lost = (R.usable(s) + own + absorbed) * decay;
+  h.usableOwn = (h.usableOwn + own) * (1 - decay);
+  h.usableGiven = (h.usableGiven + absorbed) * (1 - decay);
+  h.rates.own = own / dt;
+  h.rates.given = absorbed / dt;
+  h.rates.decay = lost / dt;
   s.stats.ownBits += own;
   s.stats.givenBits += absorbed;
   research(s, own, absorbed);
@@ -148,7 +169,9 @@ function abandonInstitutions(s: GameState): void {
   for (const id of [...INSTITUTION_IDS].reverse()) {
     while (h.institutions[id] > 0 && R.staffUsed(s) > R.staffCap(s)) {
       h.institutions[id] -= 1;
-      if (!s.sleeping) addLog(s, TEXT.abandoned(INSTITUTIONS[id].name));
+      if (!s.sleeping) {
+        addLog(s, TEXT.abandoned(INSTITUTIONS[id].name), "warning");
+      }
     }
   }
 }
@@ -186,10 +209,7 @@ function research(s: GameState, own: number, given: number): void {
     p.done = true;
     if (!s.sleeping) {
       const u = Math.round(R.understanding(s, h.target) * 100);
-      addLog(
-        s,
-        `観測: 集団が「${TECHS[h.target].name}」を獲得した。理解度 ${u}%。`,
-      );
+      addLog(s, TEXT.discovered(TECHS[h.target].name, u), "observe");
     }
     h.target = null;
   }
@@ -197,13 +217,15 @@ function research(s: GameState, own: number, given: number): void {
 
 const KIND_WEIGHT = { power: 3, control: 1, receptive: 1.5 } as const;
 
-/** 次に研究する技術は人類が選ぶ。差し迫った力を求めがち */
+/** 次に研究する技術は人類が選ぶ。差し迫った力と、手の届くものを求めがち */
 function pickTarget(s: GameState): TechId | null {
   const options = TECH_IDS.filter(
     (id) => !s.humans.techs[id].done && R.techAvailable(s, id),
   );
   if (options.length === 0) return null;
-  const weights = options.map((id) => KIND_WEIGHT[TECHS[id].kind]);
+  const weights = options.map(
+    (id) => KIND_WEIGHT[TECHS[id].kind] / Math.sqrt(TECHS[id].cost),
+  );
   let roll = nextRandom(s) * weights.reduce((a, b) => a + b, 0);
   for (let i = 0; i < options.length; i++) {
     roll -= weights[i];
@@ -218,14 +240,14 @@ function stepWinter(s: GameState, dt: number): void {
   const h = s.humans;
   if (h.winter > 0) {
     h.winter = Math.max(0, h.winter - dt);
-    if (h.winter === 0 && !s.sleeping) addLog(s, TEXT.winterEnd);
+    if (h.winter === 0 && !s.sleeping) addLog(s, TEXT.winterEnd, "observe");
     return;
   }
   if (nextRandom(s) < 1 - Math.exp(-R.WINTER_RATE * dt)) {
     h.winter = R.WINTER_MIN + nextRandom(s) * R.WINTER_SPAN;
     h.pop = Math.max(R.MIN_POP, h.pop * R.WINTER_SHOCK);
     s.stats.winters += 1;
-    if (!s.sleeping) addLog(s, TEXT.winterStart);
+    if (!s.sleeping) addLog(s, TEXT.winterStart, "warning");
   }
 }
 
@@ -247,13 +269,13 @@ function stepTipping(s: GameState, dt: number): void {
 
     const stage = STAGES.filter((x) => s.stress[e] >= x).length;
     if (stage > s.stages[e] && !s.sleeping) {
-      addLog(s, ELEMENTS[e].signs[stage - 1]);
+      addLog(s, ELEMENTS[e].signs[stage - 1], "warning");
     }
     s.stages[e] = stage;
 
     if (s.stress[e] >= 1) {
       s.tipped.push(e);
-      if (!s.sleeping) addLog(s, ELEMENTS[e].tipped);
+      if (!s.sleeping) addLog(s, ELEMENTS[e].tipped, "warning");
     }
   }
   if (s.tipped.length === ELEMENT_IDS.length) endChapter(s, "ragnarok");
@@ -267,7 +289,8 @@ function endChapter(s: GameState, ending: "ragnarok" | "writing"): void {
   wakeUp(s);
   s.phase = "ended";
   s.ending = ending;
-  for (const line of ENDING[ending].lines) addLog(s, line);
+  const kind = ending === "ragnarok" ? "warning" : "observe";
+  for (const line of ENDING[ending].lines) addLog(s, line, kind);
   sampleHistory(s, true);
 }
 

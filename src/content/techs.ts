@@ -4,6 +4,8 @@ import type { ElementId } from "./elements.ts";
 export type TechId =
   | "fire"
   | "tools"
+  | "scavenging"
+  | "smithing"
   | "calendar"
   | "symbols"
   | "herding"
@@ -35,11 +37,15 @@ export interface TechDef {
   /** この技術の力が押すティッピング要素 */
   element: ElementId;
   desc: string;
+  /** 獲得済みのとき、集落の観測報告に出る様子 */
+  sign: string;
 }
 
 export const TECH_IDS = [
   "fire",
   "tools",
+  "scavenging",
+  "smithing",
   "calendar",
   "symbols",
   "herding",
@@ -52,6 +58,14 @@ export const TECH_IDS = [
 
 /** 第I章の到達目標 */
 export const GOAL_TECH: TechId = "writing";
+
+/** 通信を確立した時点で、集落が自力で身につけている技術 */
+export const INITIAL_TECHS: readonly TechId[] = [
+  "fire",
+  "tools",
+  "calendar",
+  "agriculture",
+];
 
 export const TECHS: Record<TechId, TechDef> = {
   fire: {
@@ -67,10 +81,11 @@ export const TECHS: Record<TechId, TechDef> = {
     retention: 0,
     element: "nidhoggr",
     desc: "火を絶やさず運ぶ技術。森を焼いて拓くこともできる。",
+    sign: "焚き火が絶えない。",
   },
   tools: {
-    name: "石器の改良",
-    label: "TOOLS",
+    name: "廃材の道具",
+    label: "SCRAP TOOLS",
     kind: "power",
     cost: 2000,
     requires: [],
@@ -80,11 +95,42 @@ export const TECHS: Record<TechId, TechDef> = {
     absorb: 0,
     retention: 0,
     element: "fenrir",
-    desc: "刃を研ぎ出す技術。狩りにも争いにも使える。",
+    desc: "廃墟の金属やガラスを削って刃にする。狩りにも争いにも使える。",
+    sign: "廃材を削った刃や鍬を使っている。",
+  },
+  scavenging: {
+    name: "廃墟あさり",
+    label: "SCAVENGING",
+    kind: "power",
+    cost: 1000,
+    requires: [],
+    power: 0.5,
+    control: 0.3,
+    capacity: 0.5,
+    absorb: 0,
+    retention: 0,
+    element: "fenrir",
+    desc: "廃墟から使えるものを掘り出す。手っ取り早いが、取り合いになる。",
+    sign: "廃墟を掘り返す一団がいる。",
+  },
+  smithing: {
+    name: "鉄くず鍛冶",
+    label: "SCRAP SMITHING",
+    kind: "power",
+    cost: 9000,
+    requires: ["fire", "scavenging"],
+    power: 0.6,
+    control: 0.4,
+    capacity: 0.3,
+    absorb: 0,
+    retention: 0,
+    element: "nidhoggr",
+    desc: "鉄くずを炭火で打ち直す。炭を焼くために森が削られる。",
+    sign: "炭焼きの煙が上がり、鉄を打つ音がする。",
   },
   calendar: {
-    name: "暦",
-    label: "CALENDAR",
+    name: "天文観測",
+    label: "ASTRONOMY",
     kind: "control",
     cost: 4000,
     requires: [],
@@ -94,13 +140,14 @@ export const TECHS: Record<TechId, TechDef> = {
     absorb: 0.5,
     retention: 0,
     element: "nidhoggr",
-    desc: "夜空を横切る光（この衛星）の通過を数え、季節を知る。",
+    desc: "星と、動く星（この衛星）の通過を数えて暦にする。光の信号を読み取る土台になる。",
+    sign: "夜ごとに見張りが空を見上げ、動く星の通過を数えている。",
   },
   symbols: {
     name: "記号",
     label: "SYMBOLS",
     kind: "receptive",
-    cost: 7500,
+    cost: 3000,
     requires: ["calendar"],
     power: 0,
     control: 0.2,
@@ -109,12 +156,13 @@ export const TECHS: Record<TechId, TechDef> = {
     retention: 0.3,
     element: "fenrir",
     desc: "刻み目で数や出来事を残す。受け取れる情報が増える。",
+    sign: "壁や岩に刻み目の記号が増えている。",
   },
   herding: {
     name: "牧畜",
     label: "HERDING",
     kind: "power",
-    cost: 12500,
+    cost: 6000,
     requires: ["tools"],
     power: 0.5,
     control: 0.4,
@@ -123,6 +171,7 @@ export const TECHS: Record<TechId, TechDef> = {
     retention: 0,
     element: "nidhoggr",
     desc: "獣を囲って増やす。草地を食い尽くすこともある。",
+    sign: "囲いの中で獣を飼っている。",
   },
   agriculture: {
     name: "農耕",
@@ -131,18 +180,19 @@ export const TECHS: Record<TechId, TechDef> = {
     cost: 20000,
     requires: ["tools", "calendar"],
     power: 0.8,
-    control: 0.6,
+    control: 0.45,
     capacity: 2,
     absorb: 0,
     retention: 0,
     element: "nidhoggr",
-    desc: "種をまき、収穫する。人は増えるが、土は痩せていく。",
+    desc: "種子庫に残された種で畑を作る。人は増えるが、土は痩せていく。",
+    sign: "シェルター跡の周りに畑が広がる。",
   },
   pottery: {
     name: "土器",
     label: "POTTERY",
     kind: "power",
-    cost: 12500,
+    cost: 6000,
     requires: ["fire"],
     power: 0.3,
     control: 0.25,
@@ -151,6 +201,7 @@ export const TECHS: Record<TechId, TechDef> = {
     retention: 0,
     element: "fenrir",
     desc: "蓄えを保つ器。蓄えは奪い合いの種にもなる。",
+    sign: "土器に蓄えを貯めている。",
   },
   rotation: {
     name: "輪作",
@@ -165,6 +216,7 @@ export const TECHS: Record<TechId, TechDef> = {
     retention: 0,
     element: "nidhoggr",
     desc: "畑を休ませながら使い回す。土の痩せ方を抑える。",
+    sign: "畑の一部を休ませている。",
   },
   law: {
     name: "慣習法",
@@ -179,6 +231,7 @@ export const TECHS: Record<TechId, TechDef> = {
     retention: 0.1,
     element: "fenrir",
     desc: "争いを収める決まりごと。自分たちで決めたものほどよく守られる。",
+    sign: "集まって揉め事を裁く場がある。",
   },
   writing: {
     name: "文字",
@@ -193,5 +246,6 @@ export const TECHS: Record<TechId, TechDef> = {
     retention: 0.5,
     element: "fenrir",
     desc: "言葉を形にして残す。知識が世代を越えて残りやすくなる。",
+    sign: "記号を連ねて言葉を書き残している。",
   },
 };

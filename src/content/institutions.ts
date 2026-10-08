@@ -16,6 +16,8 @@ export interface InstitutionDef {
   retention: number;
   requires: readonly TechId[];
   desc: string;
+  /** 集落の観測報告に出る様子 */
+  sign: (count: number) => string;
 }
 
 export const INSTITUTION_IDS = [
@@ -35,17 +37,19 @@ export const INSTITUTIONS: Record<InstitutionId, InstitutionDef> = {
     output: 2,
     retention: 0.03,
     requires: [],
-    desc: "物語の形で知識を口伝えする集まりの型を送る。知識の劣化も少し抑える。",
+    desc: "旧世界の話と暮らしの知恵を、物語にして口伝えする集まりの型を送る。知識の劣化も少し抑える。",
+    sign: (n) => `夜ごとに語り部の火が${n}つ灯る。`,
   },
   workshop: {
-    name: "工房",
-    label: "WORKSHOP",
+    name: "修繕小屋",
+    label: "REPAIR SHED",
     baseCost: 40,
     staff: 8,
     output: 6,
     retention: 0,
     requires: ["tools"],
-    desc: "道具を作り、改良を試す場の型を送る。",
+    desc: "廃材を直して使い回し、工夫を試す場の型を送る。",
+    sign: (n) => `修繕小屋の煙が${n}か所から上がる。`,
   },
   apprentice: {
     name: "徒弟制",
@@ -56,5 +60,6 @@ export const INSTITUTIONS: Record<InstitutionId, InstitutionDef> = {
     retention: 0.02,
     requires: ["symbols"],
     desc: "技を師から弟子へ受け渡す仕組みの型を送る。",
+    sign: (n) => `師について技を学ぶ若者たちがいる（${n}組）。`,
   },
 };

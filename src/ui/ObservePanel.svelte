@@ -1,70 +1,58 @@
 <script lang="ts">
-  import { TECH_IDS, TECHS } from "../content/techs.ts";
-  import { formatBits, formatInt, formatPercent } from "../core/format.ts";
+  import { describeLife, describeSigns } from "../core/describe.ts";
+  import { formatBits, formatInt, formatRate } from "../core/format.ts";
   import * as R from "../core/rules.ts";
   import { game } from "../game.svelte.ts";
+  import NoSignal from "./NoSignal.svelte";
   import Panel from "./Panel.svelte";
   import Stat from "./Stat.svelte";
 
   const h = $derived(game.humans);
-  const known = $derived(TECH_IDS.filter((id) => h.techs[id].done));
-  const target = $derived(h.target);
+  const contacted = $derived(
+    game.phase !== "prologue" || game.contact.step >= 3,
+  );
+  const net = $derived(h.rates.own + h.rates.given - h.rates.decay);
+  const backlog = $derived(h.latent / R.absorbRate(game));
 </script>
 
 <Panel title="OBSERVE">
-  {#if game.sleeping}
-    <p class="muted">-- NO SIGNAL / SLEEPING --</p>
+  {#if !contacted}
+    <NoSignal reason="NO CONTACT" />
+  {:else if game.sleeping}
+    <NoSignal />
   {:else}
     <Stat label="POPULATION">{formatInt(h.pop)}</Stat>
-    <Stat label="USABLE">{formatBits(R.usable(game))}</Stat>
-    <Stat label="LATENT">{formatBits(h.latent)}</Stat>
-    {#if h.winter > 0}
-      <Stat label="CLIMATE"><span class="warning">⚠ FIMBULWINTER</span></Stat>
-    {/if}
-    <h3>KNOWLEDGE</h3>
-    {#if known.length === 0}
-      <p class="muted">（獲得済みの技術は観測されていない）</p>
-    {/if}
-    <ul>
-      {#each known as id (id)}
-        <li>
-          <span>{TECHS[id].label}</span>
-          <span class="muted">{TECHS[id].name}</span>
-          <span>理解 {formatPercent(R.understanding(game, id))}</span>
-        </li>
-      {/each}
-    </ul>
-    {#if target}
-      <p>
-        <span class="muted">RESEARCH</span>
-        {TECHS[target].label}
-        <span class="muted">{TECHS[target].name}</span>
-        {formatPercent(
-          (h.techs[target].own + h.techs[target].given) / TECHS[target].cost,
-        )}
-      </p>
-    {/if}
+    <Stat label="USABLE">
+      {formatBits(R.usable(game))}
+      <span class:muted={net >= 0} class:warning={net < 0}
+        >{formatRate(net)}</span
+      >
+    </Stat>
+    <Stat label="">
+      <span class="muted">
+        自力 {formatRate(h.rates.own)} · 授与 {formatRate(h.rates.given)} · 劣化
+        {formatRate(-h.rates.decay)}
+      </span>
+    </Stat>
+    <Stat label="LATENT">
+      {formatBits(h.latent)}
+      {#if h.latent >= 1}
+        <span class="muted">受け取りまで約{Math.ceil(backlog)}年</span>
+      {/if}
+    </Stat>
+
+    <p class="report">{describeLife(game).join("")}</p>
+    {#each describeSigns(game) as sign (sign)}
+      <p class="warning">⚠ {sign}</p>
+    {/each}
   {/if}
 </Panel>
 
 <style>
-  h3 {
-    margin: 10px 0 4px;
-    font-size: 12px;
-    letter-spacing: 0.15em;
-    color: var(--muted);
+  .report {
+    margin: 10px 0 0;
   }
-  ul {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-  li {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0 10px;
-  }
-  p {
+  .warning {
     margin: 6px 0 0;
   }
 </style>

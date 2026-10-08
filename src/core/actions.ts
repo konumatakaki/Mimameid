@@ -1,6 +1,6 @@
 // プレイヤーの操作。can* は画面のボタンの有効・無効にも使う。
 import { INSTITUTIONS, type InstitutionId } from "../content/institutions.ts";
-import { TEXT, SCAN_LOG } from "../content/text.ts";
+import { CONTACT, RESPONSES, TEXT } from "../content/text.ts";
 import { UPGRADES, type UpgradeId } from "../content/upgrades.ts";
 import * as R from "./rules.ts";
 import { addDebt, fallAsleep, wakeUp } from "./sim.ts";
@@ -10,18 +10,56 @@ function active(s: GameState): boolean {
   return !s.sleeping && s.phase !== "ended";
 }
 
-export function canScan(s: GameState): boolean {
+// --- 標準通信確立手続き（序章） ---
+
+function contactStep(s: GameState, step: number, cost: number): boolean {
   return (
-    active(s) && s.phase === "prologue" && s.satellite.energy >= R.SCAN_COST
+    active(s) &&
+    s.phase === "prologue" &&
+    s.contact.step === step &&
+    s.satellite.energy >= cost
   );
+}
+
+export function canScan(s: GameState): boolean {
+  return contactStep(s, 0, R.SCAN_COST);
 }
 
 export function scan(s: GameState): void {
   if (!canScan(s)) return;
   s.satellite.energy -= R.SCAN_COST;
-  s.phase = "chapter1";
-  for (const line of SCAN_LOG) addLog(s, line);
+  s.contact.step = 1;
+  for (const line of CONTACT.scanLog) addLog(s, line, "observe");
 }
+
+export function canBeacon(s: GameState): boolean {
+  return contactStep(s, 1, R.BEACON_COST);
+}
+
+export function beacon(s: GameState): void {
+  if (!canBeacon(s)) return;
+  s.satellite.energy -= R.BEACON_COST;
+  s.contact.beacons += 1;
+  addLog(s, CONTACT.beaconLog(s.contact.beacons, R.BEACONS_NEEDED));
+  if (s.contact.beacons >= R.BEACONS_NEEDED) {
+    s.contact.step = 2;
+    s.contact.responseAt = s.year + R.RESPONSE_DELAY;
+    addLog(s, CONTACT.waitLog);
+  }
+}
+
+export function canHandshake(s: GameState): boolean {
+  return contactStep(s, 3, R.HANDSHAKE_COST);
+}
+
+export function handshake(s: GameState): void {
+  if (!canHandshake(s)) return;
+  s.satellite.energy -= R.HANDSHAKE_COST;
+  s.phase = "chapter1";
+  for (const line of CONTACT.handshakeLog) addLog(s, line);
+}
+
+// --- 第I章 ---
 
 export function canTransmit(s: GameState): boolean {
   return (
@@ -34,6 +72,11 @@ export function transmit(s: GameState): void {
   s.satellite.energy -= R.TRANSMIT_COST;
   s.humans.latent += R.bandwidth(s);
   s.stats.clicks += 1;
+  // 集落は受け取れた分だけ、きれいに応答を返す
+  const backlog = s.humans.latent / R.absorbRate(s);
+  const response = RESPONSES.find((r) => backlog <= r.backlogYears)!;
+  addLog(s, response.text, "response");
+  if (s.stats.clicks === R.SEED_REVEAL_CLICKS) addLog(s, TEXT.seedHint);
   addDebt(s, R.TRANSMIT_DEBT * R.debtFactor(s));
 }
 
@@ -55,6 +98,7 @@ export function seed(s: GameState, id: InstitutionId): void {
   if (!canSeed(s, id)) return;
   s.satellite.energy -= R.seedCost(s, id);
   s.humans.institutions[id] += 1;
+  addLog(s, TEXT.seeded(INSTITUTIONS[id].name));
   if (Object.values(s.humans.institutions).reduce((a, b) => a + b) === 1) {
     addLog(s, TEXT.firstSeed);
   }
@@ -71,6 +115,7 @@ export function upgrade(s: GameState, id: UpgradeId): void {
   if (!canUpgrade(s, id)) return;
   s.satellite.energy -= UPGRADES[id].cost;
   s.satellite.upgrades.push(id);
+  addLog(s, TEXT.upgraded(UPGRADES[id].name));
   addDebt(s, R.UPGRADE_DEBT * R.debtFactor(s));
 }
 

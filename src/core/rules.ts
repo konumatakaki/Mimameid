@@ -26,6 +26,10 @@ export const SAFE_MODE_EXIT = 0.5;
 export const ARCHIVE_RISK = 0.8;
 export const ARCHIVE_LOSS = 0.001; // / 年
 export const SCAN_COST = 10;
+export const BEACON_COST = 5;
+export const BEACONS_NEEDED = 3;
+export const RESPONSE_DELAY = 0.6; // 年（起動中なら約3秒）
+export const HANDSHAKE_COST = 10;
 export const TRANSMIT_COST = 5;
 export const TRANSMIT_DEBT = 0.01;
 export const BASE_BANDWIDTH = 256; // bits / 回 / 機
@@ -51,7 +55,7 @@ export const KNOWLEDGE_SCALE = 10000; // bits
 
 // ティッピング
 export const PRESSURE_REF_POP = 300;
-export const STRESS_GAIN = 0.035; // / 年
+export const STRESS_GAIN = 0.022; // / 年
 export const STRESS_RECOVERY = 0.01; // / 年
 export const CASCADE = 0.01; // / 年
 
@@ -62,6 +66,9 @@ export const WINTER_SPAN = 20; // 年
 export const WINTER_SHOCK = 0.85; // 始まった瞬間の人口倍率
 
 export const HISTORY_INTERVAL = 10; // 年
+
+/** この回数だけ送信すると、種まきの欄が開く */
+export const SEED_REVEAL_CLICKS = 3;
 
 export function hasUpgrade(s: GameState, id: UpgradeId): boolean {
   return s.satellite.upgrades.includes(id);
@@ -185,6 +192,11 @@ export function staffCap(s: GameState): number {
 
 export function seedCost(s: GameState, id: InstitutionId): number {
   return INSTITUTIONS[id].baseCost * COST_GROWTH ** s.humans.institutions[id];
+}
+
+export function techProgress(s: GameState, id: TechId): number {
+  const p = s.humans.techs[id];
+  return Math.min(1, (p.own + p.given) / TECHS[id].cost);
 }
 
 export function techAvailable(s: GameState, id: TechId): boolean {

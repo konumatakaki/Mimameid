@@ -64,6 +64,14 @@ export const STRATEGIES: Strategy[] = [
   },
 ];
 
+/** 標準通信確立手続きを最後まで進める */
+function completeContact(s: GameState, run: (f: () => void) => boolean): void {
+  run(() => A.scan(s));
+  while (A.canBeacon(s)) run(() => A.beacon(s));
+  while (s.contact.step === 2) run(() => {}); // 応答を待つ
+  run(() => A.handshake(s));
+}
+
 export interface Result {
   ending: GameState["ending"];
   years: number;
@@ -86,7 +94,7 @@ export function play(
     seconds += SECONDS_PER_ACTION;
     return true;
   };
-  run(() => A.scan(s));
+  completeContact(s, run);
   while (s.phase !== "ended" && s.year < maxYears) {
     if (!s.sleeping) strategy.act(s, run);
     A.setSleep(s, true);

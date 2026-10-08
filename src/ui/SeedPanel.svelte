@@ -6,6 +6,7 @@
   import * as R from "../core/rules.ts";
   import { game } from "../game.svelte.ts";
   import Action from "./Action.svelte";
+  import NoSignal from "./NoSignal.svelte";
   import Panel from "./Panel.svelte";
 
   function detail(id: (typeof INSTITUTION_IDS)[number]): string {
@@ -19,17 +20,21 @@
 </script>
 
 <Panel title="SEED">
-  <p class="muted">{MANUAL.seed}</p>
-  <p>STAFF {R.staffUsed(game)} / {R.staffCap(game)}</p>
-  {#each INSTITUTION_IDS as id (id)}
-    <Action
-      label={INSTITUTIONS[id].label}
-      detail={detail(id)}
-      desc="{INSTITUTIONS[id].name}: {INSTITUTIONS[id].desc}"
-      disabled={!A.canSeed(game, id)}
-      onclick={() => A.seed(game, id)}
-    />
-  {/each}
+  {#if game.sleeping}
+    <NoSignal />
+  {:else}
+    <p class="muted">{MANUAL.seed}</p>
+    <p>STAFF {R.staffUsed(game)} / {R.staffCap(game)}</p>
+    {#each INSTITUTION_IDS as id (id)}
+      <Action
+        label={INSTITUTIONS[id].label}
+        detail={detail(id)}
+        desc="{INSTITUTIONS[id].name}: {INSTITUTIONS[id].desc}"
+        disabled={!A.canSeed(game, id)}
+        onclick={() => A.seed(game, id)}
+      />
+    {/each}
+  {/if}
 </Panel>
 
 <style>
